@@ -44,6 +44,7 @@ public class RunRow {
   @Nullable private final UUID endRunStateUuid;
   @Getter private final String namespaceName;
   @Getter private final String jobName;
+  @Getter private final String location;
 
   public boolean hasInputVersionUuids() {
     return !inputVersionUuids.isEmpty();

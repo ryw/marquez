@@ -60,6 +60,7 @@ public final class ExtendedRunRowMapper implements RowMapper<ExtendedRunRow> {
         uuidOrNull(results, Columns.END_RUN_STATE_UUID),
         columnNames.contains(Columns.ARGS) ? stringOrThrow(results, Columns.ARGS) : "",
         stringOrThrow(results, Columns.NAMESPACE_NAME),
-        stringOrThrow(results, Columns.JOB_NAME));
+        stringOrThrow(results, Columns.JOB_NAME),
+        stringOrNull(results, Columns.LOCATION));
   }
 }

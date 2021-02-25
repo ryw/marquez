@@ -8,6 +8,7 @@ type Query {
   namespace(name: String!): Namespace
   jobs: [Job]
   job(namespace: String!, name: String): Job
+  dataQuality(namespaceName: String!, jobName: String!): String
 }
 
 type Tag {

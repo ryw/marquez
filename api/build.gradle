@@ -48,7 +48,12 @@ dependencies {
     compile 'org.postgresql:postgresql:42.2.6'
     compile 'com.graphql-java:graphql-java:16.2'
     compile 'com.graphql-java-kickstart:graphql-java-servlet:11.1.0'
+    compile 'io.prometheus:simpleclient:0.10.0'
+    compile 'io.prometheus:simpleclient_hotspot:0.10.0'
+    compile 'io.prometheus:simpleclient_httpserver:0.10.0'
+    compile 'io.prometheus:simpleclient_pushgateway:0.10.0'
     compileOnly "org.projectlombok:lombok:${lombokVersion}"
+
     annotationProcessor "org.projectlombok:lombok:${lombokVersion}"
 
     testCompile project(':clients:java')

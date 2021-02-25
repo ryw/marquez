@@ -44,7 +44,9 @@ public class ExtendedRunRow extends RunRow {
       @Nullable final UUID endRunStateUuid,
       @NonNull final String args,
       @NonNull final String namespaceName,
-      @NonNull final String jobName) {
+      @NonNull final String jobName,
+      final String location
+      ) {
     super(
         uuid,
         createdAt,
@@ -60,7 +62,7 @@ public class ExtendedRunRow extends RunRow {
         endedAt,
         endRunStateUuid,
         namespaceName,
-        jobName);
+        jobName, location);
     this.args = args;
   }
 }

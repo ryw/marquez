@@ -2,7 +2,13 @@ package marquez.service;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.prometheus.client.CollectorRegistry;
+import io.prometheus.client.Counter;
+import io.prometheus.client.Gauge;
+import io.prometheus.client.exporter.PushGateway;
+import java.io.IOException;
 import java.time.ZoneId;
+import java.time.temporal.ChronoUnit;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -17,9 +23,11 @@ import marquez.common.models.JobName;
 import marquez.common.models.JobVersionId;
 import marquez.common.models.NamespaceName;
 import marquez.common.models.RunId;
+import marquez.common.models.RunState;
 import marquez.db.DatasetVersionDao;
 import marquez.db.OpenLineageDao;
 import marquez.db.models.ExtendedDatasetVersionRow;
+import marquez.db.models.ExtendedRunRow;
 import marquez.db.models.RunArgsRow;
 import marquez.db.models.RunRow;
 import marquez.db.models.UpdateLineageRow;
@@ -28,6 +36,7 @@ import marquez.service.RunTransitionListener.JobOutputUpdate;
 import marquez.service.RunTransitionListener.RunInput;
 import marquez.service.RunTransitionListener.RunOutput;
 import marquez.service.models.LineageEvent;
+import marquez.service.models.LineageEvent.Dataset;
 import marquez.service.models.RunMeta;
 
 @Slf4j
@@ -36,12 +45,14 @@ public class OpenLineageService {
   private final RunService runService;
   private final DatasetVersionDao datasetVersionDao;
   private final ObjectMapper mapper = Utils.newObjectMapper();
+  private final PushGateway prometheus;
 
   public OpenLineageService(
       OpenLineageDao openLineageDao, RunService runService, DatasetVersionDao datasetVersionDao) {
     this.openLineageDao = openLineageDao;
     this.runService = runService;
     this.datasetVersionDao = datasetVersionDao;
+    this.prometheus = new PushGateway("localhost:9091");
   }
 
   public CompletableFuture<Void> createAsync(LineageEvent event) {
@@ -52,6 +63,71 @@ public class OpenLineageService {
                   if (event.getEventType() != null) {
                     buildJobInputUpdate(update).ifPresent(runService::notify);
                     buildJobOutputUpdate(update).ifPresent(runService::notify);
+                  }
+                  if (event.getEventType() != null &&
+                      openLineageDao.getRunState(event.getEventType()) == RunState.COMPLETED) {
+                    Optional<ExtendedRunRow> latestRun =
+                        openLineageDao.createRunDao().findLatestRunForJob(event.getJob().getName(), event.getJob().getNamespace());
+                    CollectorRegistry registry = new CollectorRegistry();
+
+                    if (latestRun.get().getStartedAt().isPresent()) {
+                      Gauge metric = Gauge.build()
+                          .name("job_duration_ms")
+                          .help("job duration ms")
+                          .labelNames("name")
+                          .register(registry);
+
+                      long milli = ChronoUnit.MILLIS.between(latestRun.get().getStartedAt().get(),
+                          latestRun.get().getEndedAt().get());
+                      metric.labels(String.format("%s_%s", event.getJob().getNamespace(),
+                          event.getJob().getName()).replaceAll("[-.]", ""))
+                          .inc(milli);
+                    }
+
+                    //get previous run
+                    List<ExtendedRunRow> top2 =
+                        openLineageDao.createRunDao().findLast2Runs(event.getJob().getName(), event.getJob().getNamespace());
+                    if (top2.size() > 1) {
+                      if (top2.get(0).getLocation() != null && !top2.get(0).getLocation().equalsIgnoreCase(top2.get(1).getLocation())) {
+                        Counter metric = Counter.build()
+                            .name("job_version_change")
+                            .help("job version change")
+                            .labelNames("name")
+                            .register(registry);
+                        metric.labels(
+                                String.format("%s_%s", event.getJob().getNamespace(),
+                                    event.getJob().getName()).replaceAll("[-.]", ""))
+                            .inc(1);
+                      }
+                    }
+                    if (event.getOutputs() != null) {
+                      for (Dataset dataset: event.getOutputs()) {
+                        if (dataset.getFacets() != null && dataset.getFacets().getAdditionalFacets().containsKey("datasetQualityFacet")) {
+                          List<Map<String, Object>> metrics = (List<Map<String, Object>>)dataset.getFacets().getAdditionalFacets().get("datasetQualityFacet");
+                          for (Map<String, Object> metric : metrics) {
+                            for (Map.Entry<String, Object>entry : metric.entrySet()) {
+                              Map map = (Map) entry.getValue();
+                              Gauge gauge = Gauge.build()
+                                  .name(entry.getKey())
+                                  .labelNames("name")
+                                  .help(" metric ")
+                                  .register(registry);
+                              gauge.labels(
+                                      String.format("%s_%s", dataset.getNamespace(),
+                                          dataset.getName()).replaceAll("[-.]", ""))
+                                  .inc((Integer) map.get("sum"));
+                            }
+                          }
+                        }
+                      }
+                    }
+                    try {
+                      prometheus.push(registry, "dataQualityFacet");
+                    } catch (IOException e) {
+                      log.error("err", e);
+                      e.printStackTrace();
+                    }
+
                   }
                 });
 
