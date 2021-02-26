@@ -9,12 +9,13 @@ import org.apache.spark.sql.catalyst.TableIdentifier;
 import org.apache.spark.sql.catalyst.catalog.CatalogStorageFormat;
 import org.apache.spark.sql.catalyst.catalog.CatalogTable;
 import org.apache.spark.sql.catalyst.catalog.CatalogTableType;
+import org.apache.spark.sql.catalyst.plans.logical.InsertIntoDir;
+import org.apache.spark.sql.catalyst.plans.logical.InsertIntoTable;
 import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan;
+import org.apache.spark.sql.catalyst.plans.logical.Statistics;
 import org.apache.spark.sql.execution.command.CreateDataSourceTableAsSelectCommand;
-import org.apache.spark.sql.execution.datasources.FileIndex;
-import org.apache.spark.sql.execution.datasources.HadoopFsRelation;
-import org.apache.spark.sql.execution.datasources.InsertIntoHadoopFsRelationCommand;
-import org.apache.spark.sql.execution.datasources.LogicalRelation;
+import org.apache.spark.sql.execution.command.InsertIntoDataSourceDirCommand;
+import org.apache.spark.sql.execution.datasources.*;
 import org.apache.spark.sql.execution.datasources.jdbc.JDBCOptions;
 import org.apache.spark.sql.execution.datasources.jdbc.JDBCRelation;
 import org.apache.spark.sql.sources.BaseRelation;
@@ -37,6 +38,18 @@ public abstract class LogicalPlanTraverser {
           visit((InsertIntoHadoopFsRelationCommand) plan);
         }
         break;
+
+      case "InsertIntoDataSourceCommand":
+        if (plan instanceof InsertIntoDataSourceCommand) {
+          visit((InsertIntoDataSourceCommand) plan);
+        }
+        break;
+
+      case "InsertIntoDataSourceDirCommand":
+        if (plan instanceof InsertIntoDataSourceDirCommand) {
+          visit ((InsertIntoDataSourceDirCommand) plan);
+        }
+        break;
       case "CreateDataSourceTableAsSelectCommand":
         if (plan instanceof CreateDataSourceTableAsSelectCommand) {
           visit((CreateDataSourceTableAsSelectCommand) plan);
@@ -45,7 +58,6 @@ public abstract class LogicalPlanTraverser {
     }
 
     visitChildren(asJavaCollection(plan.children()));
-
     return null;
   }
 
@@ -87,6 +99,14 @@ public abstract class LogicalPlanTraverser {
   protected Object visit(InsertIntoHadoopFsRelationCommand insertIntoHadoopFsRelationCommand) {
     visit(insertIntoHadoopFsRelationCommand.outputPath());
     visit(insertIntoHadoopFsRelationCommand.query());
+    visitStatistics(insertIntoHadoopFsRelationCommand.stats());
+    return null;
+  }
+
+  protected Object visit(InsertIntoDataSourceCommand insertIntoDataSourceCommand) {
+    visit(insertIntoDataSourceCommand.logicalRelation());
+    visit(insertIntoDataSourceCommand.query());
+    visitStatistics(insertIntoDataSourceCommand.stats());
     return null;
   }
 
@@ -165,6 +185,10 @@ public abstract class LogicalPlanTraverser {
     for (LogicalPlan plan : children) {
       visit(plan);
     }
+    return null;
+  }
+
+  protected Object visitStatistics(Statistics stats) {
     return null;
   }
 }
