@@ -37,6 +37,7 @@ from pkg_resources import parse_version
 try:
     from airflow.utils.log.logging_mixin import LoggingMixin
 except ImportError as err:
+    # older Airflow versions
     from airflow import LoggingMixin
 
 from marquez_airflow.marquez import Marquez

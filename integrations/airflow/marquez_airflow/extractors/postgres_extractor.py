@@ -16,20 +16,11 @@ from typing import Optional
 from airflow.hooks.postgres_hook import PostgresHook
 from airflow.operators.postgres_operator import PostgresOperator
 
-from marquez_airflow.models import (
-    DbTableName,
-    DbTableSchema,
-    DbColumn
-)
+from marquez_airflow.models import DbTableName, DbTableSchema, DbColumn
 from marquez_airflow.utils import get_connection_uri
 from marquez_airflow.extractors.sql.experimental import SqlMeta
 from marquez_airflow.extractors.sql.experimental.parser import SqlParser
-from marquez_airflow.extractors import (
-    BaseExtractor,
-    StepMetadata,
-    Source,
-    Dataset
-)
+from marquez_airflow.extractors import BaseExtractor, StepMetadata, Source, Dataset
 
 _TABLE_SCHEMA = 0
 _TABLE_NAME = 1
@@ -55,9 +46,8 @@ class PostgresExtractor(BaseExtractor):
         # property that is used to override the one defined in the connection.
         conn_id = self.operator.postgres_conn_id
         source = Source(
-            type='POSTGRESQL',
-            name=conn_id,
-            connection_url=get_connection_uri(conn_id))
+            type="POSTGRESQL", name=conn_id, connection_url=get_connection_uri(conn_id)
+        )
 
         # (3) Map input / output tables to dataset objects with source set
         # as the current connection. We need to also fetch the schema for the
@@ -67,32 +57,25 @@ class PostgresExtractor(BaseExtractor):
             Dataset.from_table(
                 source=source,
                 table_name=in_table_schema.table_name.name,
-                schema_name=in_table_schema.schema_name
-            ) for in_table_schema in self._get_table_schemas(
-                sql_meta.in_tables
+                schema_name=in_table_schema.schema_name,
             )
+            for in_table_schema in self._get_table_schemas(sql_meta.in_tables)
         ]
         outputs = [
-            Dataset.from_table_schema(
-                source=source,
-                table_schema=out_table_schema
-            ) for out_table_schema in self._get_table_schemas(
-                sql_meta.out_tables
+            Dataset.from_table_schema(source=source, table_schema=out_table_schema)
+            for out_table_schema in self._get_table_schemas(sql_meta.out_tables)
+        ]
+
+        return [
+            StepMetadata(
+                name=f"{self.operator.dag_id}.{self.operator.task_id}",
+                inputs=inputs,
+                outputs=outputs,
+                context={"sql": self.operator.sql},
             )
         ]
 
-        return [StepMetadata(
-            name=f"{self.operator.dag_id}.{self.operator.task_id}",
-            inputs=inputs,
-            outputs=outputs,
-            context={
-                'sql': self.operator.sql
-            }
-        )]
-
-    def _get_table_schemas(
-            self, table_names: [DbTableName]
-    ) -> [DbTableSchema]:
+    def _get_table_schemas(self, table_names: [DbTableName]) -> [DbTableSchema]:
         # Avoid querying postgres by returning an empty array
         # if no table names have been provided.
         if not table_names:
@@ -103,13 +86,13 @@ class PostgresExtractor(BaseExtractor):
 
         hook = PostgresHook(
             postgres_conn_id=self.operator.postgres_conn_id,
-            schema=self.operator.database
+            schema=self.operator.database,
         )
         with closing(hook.get_conn()) as conn:
             with closing(conn.cursor()) as cursor:
-                table_names_as_list = ",".join(map(
-                    lambda name: f"'{name}'", table_names
-                ))
+                table_names_as_list = ",".join(
+                    map(lambda name: f"'{name}'", table_names)
+                )
                 cursor.execute(
                     f"""
                     SELECT table_schema,
@@ -127,24 +110,24 @@ class PostgresExtractor(BaseExtractor):
                     table_column: DbColumn = DbColumn(
                         name=row[_COLUMN_NAME],
                         type=row[_UDT_NAME],
-                        ordinal_position=row[_ORDINAL_POSITION]
+                        ordinal_position=row[_ORDINAL_POSITION],
                     )
 
                     # Attempt to get table schema
                     table_key: str = f"{table_schema_name}.{table_name}"
-                    table_schema: Optional[DbTableSchema] = \
-                        schemas_by_table.get(table_key)
+                    table_schema: Optional[DbTableSchema] = schemas_by_table.get(
+                        table_key
+                    )
 
                     if table_schema:
                         # Add column to existing table schema.
-                        schemas_by_table[table_key]. \
-                            columns.append(table_column)
+                        schemas_by_table[table_key].columns.append(table_column)
                     else:
                         # Create new table schema with column.
                         schemas_by_table[table_key] = DbTableSchema(
                             schema_name=table_schema_name,
                             table_name=table_name,
-                            columns=[table_column]
+                            columns=[table_column],
                         )
 
         return list(schemas_by_table.values())

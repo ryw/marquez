@@ -13,7 +13,12 @@
 from typing import List
 from abc import ABC, abstractmethod
 
-from airflow import LoggingMixin
+try:
+    from airflow.utils.log.logging_mixin import LoggingMixin
+except ImportError as err:
+    # older Airflow versions
+    from airflow import LoggingMixin
+
 from airflow.models import BaseOperator
 
 from marquez_airflow.models import DbTableSchema, DbColumn
@@ -32,17 +37,20 @@ class Source:
         self.connection_url = connection_url
 
     def __eq__(self, other):
-        return self.name == other.name and \
-               self.type == other.type and \
-               self.connection_url == other.connection_url
+        return (
+            self.name == other.name
+            and self.type == other.type
+            and self.connection_url == other.connection_url
+        )
 
     def __repr__(self):
         return f"Source({self.name!r},{self.type!r},{self.connection_url!r})"
 
 
 class Field:
-    def __init__(self, name: str, type: str,
-                 tags: List[str] = [], description: str = None):
+    def __init__(
+        self, name: str, type: str, tags: List[str] = [], description: str = None
+    ):
         self.name = name
         self.type = type
         self.tags = tags
@@ -50,17 +58,15 @@ class Field:
 
     @staticmethod
     def from_column(column: DbColumn):
-        return Field(
-            name=column.name,
-            type=column.type,
-            description=column.description
-        )
+        return Field(name=column.name, type=column.type, description=column.description)
 
     def __eq__(self, other):
-        return self.name == other.name and \
-               self.type == other.type and \
-               self.tags == other.tags and \
-               self.description == other.description
+        return (
+            self.name == other.name
+            and self.type == other.type
+            and self.tags == other.tags
+            and self.description == other.description
+        )
 
     def __repr__(self):
         return f"Field({self.name!r},{self.type!r}, \
@@ -68,8 +74,14 @@ class Field:
 
 
 class Dataset:
-    def __init__(self, source: Source, name: str, type: DatasetType,
-                 fields: List[Field] = [], description=None):
+    def __init__(
+        self,
+        source: Source,
+        name: str,
+        type: DatasetType,
+        fields: List[Field] = [],
+        description=None,
+    ):
         self.source = source
         self.name = name
         self.type = type
@@ -77,15 +89,11 @@ class Dataset:
         self.description = description
 
     @staticmethod
-    def from_table(source: Source, table_name: str,
-                   schema_name: str = None):
+    def from_table(source: Source, table_name: str, schema_name: str = None):
         return Dataset(
             type=DatasetType.DB_TABLE,
-            name=Dataset._to_name(
-                schema_name=schema_name,
-                table_name=table_name
-            ),
-            source=source
+            name=Dataset._to_name(schema_name=schema_name, table_name=table_name),
+            source=source,
         )
 
     @staticmethod
@@ -94,15 +102,16 @@ class Dataset:
             type=DatasetType.DB_TABLE,
             name=Dataset._to_name(
                 schema_name=table_schema.schema_name,
-                table_name=table_schema.table_name.name
+                table_name=table_schema.table_name.name,
             ),
             source=source,
             fields=[
                 # We want to maintain column order using ordinal position.
-                Field.from_column(column) for column in sorted(
+                Field.from_column(column)
+                for column in sorted(
                     table_schema.columns, key=lambda x: x.ordinal_position
                 )
-            ]
+            ],
         )
 
     @staticmethod
@@ -112,11 +121,13 @@ class Dataset:
         return f"{schema_name}.{table_name}" if schema_name else table_name
 
     def __eq__(self, other):
-        return self.source == other.source and \
-               self.name == other.name and \
-               self.type == other.type and \
-               self.fields == other.fields and \
-               self.description == other.description
+        return (
+            self.source == other.source
+            and self.name == other.name
+            and self.type == other.type
+            and self.fields == other.fields
+            and self.description == other.description
+        )
 
     def __repr__(self):
         return f"Dataset({self.source!r},{self.name!r}, \
@@ -132,8 +143,7 @@ class StepMetadata:
     outputs = []
     context = {}
 
-    def __init__(self, name, location=None, inputs=None, outputs=None,
-                 context=None):
+    def __init__(self, name, location=None, inputs=None, outputs=None, context=None):
         self.name = name
         self.location = location
         if inputs:
@@ -146,8 +156,9 @@ class StepMetadata:
     def __repr__(self):
         return "name: {}\t inputs: {} \t outputs: {}".format(
             self.name,
-            ','.join([str(i) for i in self.inputs]),
-            ','.join([str(o) for o in self.outputs]))
+            ",".join([str(i) for i in self.inputs]),
+            ",".join([str(o) for o in self.outputs]),
+        )
 
 
 class BaseExtractor(ABC, LoggingMixin):
@@ -163,8 +174,10 @@ class BaseExtractor(ABC, LoggingMixin):
 
     def validate(self):
         # TODO: maybe we should also enforce the module
-        assert (self.operator_class is not None and
-                self.operator.__class__ == self.operator_class)
+        assert (
+            self.operator_class is not None
+            and self.operator.__class__ == self.operator_class
+        )
 
     # TODO: Only return a single StepMetadata object.
     @abstractmethod
