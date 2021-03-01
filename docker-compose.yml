@@ -11,7 +11,7 @@ services:
       - "db:postgres"
     depends_on:
       - db
-    entrypoint: ["./wait-for-it.sh", "db:5432", "--", "./entrypoint.sh"]
+    entrypoint: ["./wait-for-it.sh", "db:5442", "--", "./entrypoint.sh"]
 
   web:
     image: marquezproject/marquez-web:latest
@@ -28,7 +28,7 @@ services:
   db:
     image: postgres:12.1
     ports:
-      - "5432:5432"
+      - "5442:5442"
     environment:
       - POSTGRES_USER=postgres
       - POSTGRES_PASSWORD=password
